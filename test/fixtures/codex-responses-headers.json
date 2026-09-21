@@ -1,0 +1,15 @@
+{
+  "host": "127.0.0.1:8799",
+  "user-agent": "codex_exec/0.154.0 (Windows 10.0.26200; x86_64) WindowsTerminal (codex_exec; 0.154.0)",
+  "content-length": "51463",
+  "accept": "text/event-stream",
+  "authorization": "Bearer sk-dummy",
+  "content-type": "application/json",
+  "originator": "codex_exec",
+  "session-id": "01a09dec-a70c-7942-834c-8427c98e2e32",
+  "thread-id": "01a09dec-a70c-7942-834c-8427c98e2e32",
+  "x-client-request-id": "01a09dec-a70c-7942-834c-8427c98e2e32",
+  "x-codex-beta-features": "remote_compaction_v2",
+  "x-codex-turn-metadata": "{\"installation_id\":\"593be954-cf23-4ebe-b93e-2226e6234407\",\"session_id\":\"01a09dec-a70c-7942-834c-8427c98e2e32\",\"thread_id\":\"01a09dec-a70c-7942-834c-8427c98e2e32\",\"agent_name\":\"/root\",\"turn_id\":\"01a09dec-a82f-7eb2-8bd4-adade379a153\",\"window_id\":\"01a09dec-a70c-7942-834c-8427c98e2e32:0\",\"window_number\":0,\"context_window_id\":\"01a09dec-a70c-7942-834c-843b906c645d\",\"request_kind\":\"turn\",\"root_turn_id\":\"01a09dec-a82f-7eb2-8bd4-adade379a153\",\"thread_source\":\"user\",\"sandbox\":\"none\",\"sandbox_mode\":\"read-only\",\"auto_review_enabled\":false,\"node_repl_auto_review_required\":false,\"node_repl_disabled\":false,\"turn_started_at_unix_ms\":1789355927646}",
+  "x-codex-window-id": "01a09dec-a70c-7942-834c-8427c98e2e32:0"
+}

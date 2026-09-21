@@ -1,0 +1,9 @@
+node_modules/
+out/
+dist/
+.tmp/
+.pack/
+data/
+portable.flag
+*.log
+.DS_Store

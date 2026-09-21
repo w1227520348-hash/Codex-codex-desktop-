@@ -1,0 +1,880 @@
+/* ============================================================================
+ * 二次元萌系外观（默认风格）+ 背景层 + 背景编辑弹窗
+ *
+ * ▍背景可见性的根因修复（实测数据）
+ *   修复前面板 alpha = 0.74~0.76，遮罩 opacity = 0.55（渐变自身 58%~88% 不透明），
+ *   再叠 backdrop-filter: blur(12px) → 净透过率只有 12%~16% 且被糊掉，等于看不见。
+ *   现在：面板 alpha 0.42、遮罩默认 0.22、模糊 10px →
+ *   净透过率 ≈ 0.58 × (1 − 0.22×0.72) ≈ 0.49，壁纸清晰可见，文字对比度仍够。
+ *
+ * ▍约定
+ *   所有背景相关样式挂在 html[data-has-bg="1"] 之下，没有背景时完全不生效。
+ *   代码区（终端块 / diff / code-block）刻意保持高对比与深色，不参与萌化。
+ * ========================================================================== */
+
+/* ============================ 一、二次元调色板 ============================ */
+
+[data-style='anime'] {
+  --anime-radius-lg: 18px;
+  --anime-radius-md: 14px;
+  --anime-radius-sm: 10px;
+
+  /* 糖果色：樱花粉 / 奶油黄 / 薄荷绿 / 天蓝 */
+  --candy-pink: #ff7ab8;
+  --candy-pink-soft: #ffd9ec;
+  --candy-yellow: #ffe3a3;
+  --candy-mint: #a8ecd4;
+  --candy-blue: #9fd8ff;
+  --candy-purple: #c9b6ff;
+
+  --anime-heading-font: 'YouYuan', '幼圆', 'Yuanti SC', 'Microsoft YaHei UI', 'Microsoft YaHei', system-ui, sans-serif;
+}
+
+/* 明亮治愈（浅色底） */
+[data-style='anime'][data-theme='light'],
+[data-style='anime']:not([data-theme='dark']) {
+  --bg: #fff6fb;
+  --bg-soft: #fdeef7;
+  --surface: #ffffff;
+  --surface-2: #fdf3fa;
+  --surface-3: #fbe6f3;
+  --border: #ffd6ea;
+  --border-strong: #ffb0d6;
+  --text: #46324f;
+  --text-dim: #7b6188;
+  --text-faint: #a68cb3;
+  --accent: #ff6fb0;
+  --accent-hover: #ff4d9d;
+  --accent-contrast: #ffffff;
+  --accent-soft: rgb(255 111 176 / 0.16);
+
+  --anime-glow: 0 6px 20px rgb(255 143 196 / 0.28);
+  --anime-highlight: rgb(255 255 255 / 0.75);
+  --anime-sheen: linear-gradient(135deg, rgb(255 255 255 / 0.72), rgb(255 236 248 / 0.5));
+}
+
+/* 夜空变体：保持鲜艳但不刺眼，避免回到原来的冷灰 */
+[data-style='anime'][data-theme='dark'] {
+  --bg: #241a35;
+  --bg-soft: #2b2040;
+  --surface: #2f2347;
+  --surface-2: #362a50;
+  --surface-3: #3f3159;
+  --border: #4d3d6b;
+  --border-strong: #6b54a0;
+  --text: #f6ecff;
+  --text-dim: #c9b6e6;
+  --text-faint: #9d88bd;
+  --accent: #ff8ac4;
+  --accent-hover: #ffa3d2;
+  --accent-contrast: #2b1030;
+  --accent-soft: rgb(255 138 196 / 0.18);
+
+  --anime-glow: 0 6px 22px rgb(120 60 160 / 0.45);
+  --anime-highlight: rgb(255 255 255 / 0.22);
+  --anime-sheen: linear-gradient(135deg, rgb(255 255 255 / 0.1), rgb(255 138 196 / 0.08));
+}
+
+/* 站内整体底色：糖果色渐变（没有壁纸时也不至于死板） */
+[data-style='anime'] body {
+  background:
+    radial-gradient(1200px 600px at 10% -10%, var(--candy-pink-soft), transparent 60%),
+    radial-gradient(900px 500px at 100% 0%, var(--candy-blue), transparent 55%),
+    var(--bg);
+}
+
+/* ============================ 二、背景层 ============================ */
+
+.app-bg {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+  display: none;
+  filter: blur(var(--app-bg-blur, 0px));
+}
+
+html[data-has-bg='1'] .app-bg {
+  display: block;
+}
+
+/* 背景图由 JS 精确定位（缩放/平移/框选），这里只保证不被压扁 */
+.app-bg-img {
+  position: absolute;
+  max-width: none;
+  max-height: none;
+  user-select: none;
+}
+
+.app-bg-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  display: none;
+}
+
+html[data-has-bg='1'] .app-bg-overlay {
+  display: block;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--bg) 62%, transparent),
+    color-mix(in srgb, var(--bg) 88%, transparent)
+  );
+  opacity: var(--app-bg-overlay, 0.22);
+}
+
+/* 内容抬到背景之上 */
+html[data-has-bg='1'] .app {
+  position: relative;
+  z-index: 1;
+}
+
+/* 毛玻璃面板：0.42 而不是 0.76 —— 这是「看得见壁纸」的关键 */
+html[data-has-bg='1'] .sidebar,
+html[data-has-bg='1'] .statusbar,
+html[data-has-bg='1'] .composer,
+html[data-has-bg='1'] .rightpanel,
+html[data-has-bg='1'] .main {
+  background: color-mix(in srgb, var(--surface) 42%, transparent);
+  backdrop-filter: blur(10px) saturate(1.15);
+}
+
+/* 对话滚动区保持更通透，让壁纸成为主体 */
+html[data-has-bg='1'] .chat {
+  background: transparent;
+}
+
+html[data-has-bg='1'] .sidebar {
+  background: color-mix(in srgb, var(--bg-soft) 38%, transparent);
+}
+
+/* ============================ 三、萌系框架层 ============================ */
+
+[data-style='anime'] .button,
+[data-style='anime'] .icon-button {
+  border-radius: 999px;
+  transition: transform 140ms cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 140ms ease, background 140ms ease;
+}
+
+[data-style='anime'] .button:hover:not(:disabled),
+[data-style='anime'] .icon-button:hover:not(:disabled) {
+  transform: translateY(-1px) scale(1.06);
+  box-shadow: var(--anime-glow);
+}
+
+[data-style='anime'] .button:active:not(:disabled),
+[data-style='anime'] .icon-button:active:not(:disabled) {
+  transform: scale(0.96);
+}
+
+[data-style='anime'] .button-primary {
+  background: linear-gradient(135deg, var(--candy-pink), var(--candy-purple));
+  border-color: transparent;
+  box-shadow: var(--anime-glow);
+}
+
+[data-style='anime'] .button-primary:hover:not(:disabled) {
+  background: linear-gradient(135deg, var(--accent-hover), var(--candy-purple));
+}
+
+/* 圆润的输入 / 下拉 / 卡片 */
+[data-style='anime'] .input,
+[data-style='anime'] .select,
+[data-style='anime'] select,
+[data-style='anime'] textarea {
+  border-radius: var(--anime-radius-md);
+}
+
+[data-style='anime'] .sidebar,
+[data-style='anime'] .rightpanel,
+[data-style='anime'] .composer,
+[data-style='anime'] .mini-card,
+[data-style='anime'] .notice,
+[data-style='anime'] .drawer-section,
+[data-style='anime'] .drawer-slot,
+[data-style='anime'] .empty-state,
+[data-style='anime'] .modal,
+[data-style='anime'] .drawer {
+  border-radius: var(--anime-radius-lg);
+}
+
+[data-style='anime'] .mini-card,
+[data-style='anime'] .notice,
+[data-style='anime'] .drawer-section,
+[data-style='anime'] .drawer-slot {
+  border: 1px solid var(--anime-highlight);
+  box-shadow: 0 3px 14px rgb(255 143 196 / 0.14);
+}
+
+[data-style='anime'] .bubble-assistant,
+[data-style='anime'] .bubble-user {
+  border-radius: var(--anime-radius-lg);
+}
+
+[data-style='anime'] .bubble-avatar {
+  border-radius: 999px;
+  border: 2px solid var(--anime-highlight);
+  box-shadow: var(--anime-glow);
+}
+
+/* 标题用圆体，正文保持系统字体 */
+[data-style='anime'] .brand-name,
+[data-style='anime'] .drawer-title,
+[data-style='anime'] .bg-editor-title,
+[data-style='anime'] .empty-title,
+[data-style='anime'] .drawer-section-title,
+[data-style='anime'] .modal-title,
+[data-style='anime'] .activity-head-title {
+  font-family: var(--anime-heading-font);
+  letter-spacing: 0.3px;
+}
+
+[data-style='anime'] .brand-name {
+  background: linear-gradient(120deg, var(--accent), var(--candy-purple), var(--candy-blue));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* 控件高亮 */
+[data-style='anime'] .option-active,
+[data-style='anime'] .segment-active,
+[data-style='anime'] .drawer-slot-active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+[data-style='anime'] .range {
+  accent-color: var(--accent);
+}
+
+/* 滚动条 */
+[data-style='anime'] ::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+[data-style='anime'] ::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+[data-style='anime'] ::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, var(--candy-pink), var(--candy-purple));
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background-clip: content-box;
+}
+
+[data-style='anime'] ::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, var(--accent-hover), var(--candy-purple));
+  background-clip: content-box;
+}
+
+/* 加载动画：跳动的星星 */
+[data-style='anime'] .spinner {
+  animation: anime-bounce 900ms ease-in-out infinite;
+}
+
+@keyframes anime-bounce {
+  0%,
+  100% {
+    transform: translateY(0) scale(1);
+  }
+  40% {
+    transform: translateY(-3px) scale(1.12);
+  }
+}
+
+[data-style='anime'] .turn-streaming-bar {
+  background: linear-gradient(90deg, transparent, var(--candy-pink), var(--candy-purple), transparent);
+}
+
+[data-style='anime'] .turn-waiting-dot {
+  background: var(--candy-pink);
+  animation: anime-pulse 1.1s ease-in-out infinite;
+}
+
+@keyframes anime-pulse {
+  0%,
+  100% {
+    opacity: 0.4;
+    transform: scale(0.85);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.25);
+  }
+}
+
+/* 空状态：柔和光晕 */
+[data-style='anime'] .empty-art {
+  background: var(--anime-sheen);
+  border: 1px solid var(--anime-highlight);
+  border-radius: 24px;
+  box-shadow: var(--anime-glow);
+}
+
+/* Toast */
+[data-style='anime'] .toast {
+  border-radius: 999px;
+  border: 1px solid var(--anime-highlight);
+  box-shadow: var(--anime-glow);
+}
+
+/* 顶栏状态条 */
+[data-style='anime'] .statusbar {
+  background: var(--anime-sheen);
+}
+
+/* ---------------------------------------------------------------------------
+ * 底线：代码区 / 终端 / diff 一律保持高对比，不参与萌化。
+ * 这里显式把它们的底色钉死，避免上面的圆角与渐变规则漏进来影响可读性。
+ * ------------------------------------------------------------------------- */
+[data-style='anime'] .code-block,
+[data-style='anime'] .terminal,
+[data-style='anime'] .command-card,
+[data-style='anime'] .diff-line,
+[data-style='anime'] pre {
+  font-family: 'Cascadia Mono', 'Consolas', 'JetBrains Mono', ui-monospace, monospace;
+}
+
+[data-style='anime'] .code-block,
+[data-style='anime'] pre {
+  border-radius: var(--anime-radius-sm);
+}
+
+/* ============================ 四、背景编辑弹窗 ============================ */
+
+.bg-editor-root {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.bg-editor-scrim {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background: rgb(0 0 0 / 0.5);
+  backdrop-filter: blur(2px);
+}
+
+.bg-editor {
+  position: relative;
+  width: min(920px, 94vw);
+  max-height: 92vh;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 18px;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 18px;
+  box-shadow: 0 24px 60px rgb(0 0 0 / 0.4);
+  overflow: auto;
+}
+
+.bg-editor-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.bg-editor-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.bg-editor-subtitle {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--text-faint);
+}
+
+.bg-editor-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+@media (max-width: 760px) {
+  .bg-editor-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.bg-editor-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.bg-editor-pane-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.bg-editor-pane-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.bg-editor-readout {
+  font-size: 11px;
+  font-family: 'Cascadia Mono', Consolas, ui-monospace, monospace;
+  color: var(--text-faint);
+}
+
+/* 框选区 */
+.bg-crop-box {
+  position: relative;
+  height: 260px;
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  background: repeating-conic-gradient(from 0deg, var(--surface-3) 0% 25%, var(--surface-2) 0% 50%) 50% / 18px 18px;
+  overflow: hidden;
+  touch-action: none;
+}
+
+.bg-crop-image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  user-select: none;
+  pointer-events: none;
+}
+
+.bg-crop-rect {
+  position: absolute;
+  border: 2px solid var(--accent, #ff6fb0);
+  cursor: move;
+  box-shadow: 0 0 0 9999px rgb(0 0 0 / 0.45);
+}
+
+.bg-crop-handle {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  background: #fff;
+  border: 2px solid var(--accent, #ff6fb0);
+  border-radius: 4px;
+}
+
+.bg-crop-handle-nw {
+  left: -7px;
+  top: -7px;
+  cursor: nwse-resize;
+}
+
+.bg-crop-handle-ne {
+  right: -7px;
+  top: -7px;
+  cursor: nesw-resize;
+}
+
+.bg-crop-handle-sw {
+  left: -7px;
+  bottom: -7px;
+  cursor: nesw-resize;
+}
+
+.bg-crop-handle-se {
+  right: -7px;
+  bottom: -7px;
+  cursor: nwse-resize;
+}
+
+/* 所见即所得的取景框 */
+.bg-frame {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  background: var(--surface-3);
+  overflow: hidden;
+  cursor: grab;
+  touch-action: none;
+}
+
+.bg-frame:active {
+  cursor: grabbing;
+}
+
+/* 头像类槽位：取景框裁成圆形，所见即所得 */
+.bg-frame-circle {
+  border-radius: 999px;
+}
+
+.bg-frame-img {
+  position: absolute;
+  max-width: none;
+  max-height: none;
+  user-select: none;
+  pointer-events: none;
+}
+
+.bg-frame-empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  color: var(--text-faint);
+}
+
+.bg-editor-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+/* ============================ 五、抽屉补充控件 ============================ */
+
+.wallpaper-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.wallpaper-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  cursor: pointer;
+  transition: transform 140ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.wallpaper-item:hover {
+  transform: translateY(-2px) scale(1.03);
+}
+
+.wallpaper-item-active {
+  border-color: var(--accent, #ff6fb0);
+  box-shadow: 0 0 0 3px var(--accent-soft, rgb(255 111 176 / 0.16));
+}
+
+.wallpaper-thumb {
+  width: 100%;
+  height: 48px;
+  object-fit: cover;
+  border-radius: 7px;
+  display: block;
+}
+
+.wallpaper-label {
+  font-size: 11px;
+  text-align: center;
+  color: var(--text-dim);
+}
+
+/* ============================================================================
+ * 六、个性化抽屉的**布局**样式
+ *
+ * ⚠️ 这一段曾经在重写本文件做二次元主题时被整段删掉，后果是抽屉虽然渲染了，
+ *    但没有 position: fixed，于是按普通流排到 .app 内容之后 —— 落在视口下方，
+ *    表现为「点了齿轮没反应、面板打不开」。
+ *    教训：布局规则和主题装饰规则要分开维护，别在改配色时连带删掉定位。
+ * ========================================================================== */
+
+.drawer-root {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+}
+
+.drawer-scrim {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  padding: 0;
+  /* 透明遮罩：点击空白处可关闭，同时不挡住实时预览 */
+  background: transparent;
+  cursor: default;
+}
+
+.drawer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 420px;
+  max-width: 92vw;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border-left: 1px solid var(--border-strong);
+  box-shadow: -18px 0 48px rgb(0 0 0 / 0.35);
+}
+
+.drawer-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-2);
+}
+
+.drawer-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.drawer-subtitle {
+  margin: 4px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-faint);
+}
+
+.drawer-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 16px 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.drawer-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-2);
+}
+
+.drawer-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.drawer-section-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.drawer-preview {
+  display: flex;
+}
+
+.drawer-thumb {
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: var(--surface-3);
+  object-fit: cover;
+}
+
+.drawer-thumb-wide {
+  width: 100%;
+  height: 132px;
+}
+
+.drawer-thumb-slot {
+  width: 56px;
+  height: 56px;
+  object-fit: contain;
+}
+
+.drawer-thumb-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  color: var(--text-faint);
+}
+
+.drawer-url {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.drawer-url .input {
+  flex: 1;
+  min-width: 0;
+}
+
+.drawer-slot {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+/* 当前生效项高亮 */
+.drawer-slot-active {
+  border-color: var(--accent, #4f8cff);
+  box-shadow: inset 3px 0 0 var(--accent, #4f8cff);
+}
+
+.drawer-slot-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.drawer-slot-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.drawer-slot-hint {
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--text-faint);
+}
+
+.drawer-slot-body {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.drawer-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 18px;
+  border-top: 1px solid var(--border);
+  background: var(--surface-2);
+}
+
+.drawer-foot-right {
+  display: flex;
+  gap: 8px;
+}
+
+/* 隐藏的文件选择器：被所有「上传图片」按钮复用，绝不能露出来 */
+.hidden-file-input {
+  display: none;
+}
+
+.range {
+  width: 100%;
+  accent-color: var(--accent, #ff6fb0);
+}
+
+/* ---------------- 风格快捷切换按钮（顶部状态条） ---------------- */
+
+.style-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.style-toggle-emoji {
+  font-size: 13px;
+  line-height: 1;
+}
+
+/* ============================================================================
+ * 七、头像 / 图标类图片：**必须严格约束在自己的框架内**
+ *
+ * ⚠️ 这一段曾经在重写本文件做二次元主题时被整段删掉，后果是：
+ *    .brand-mark-img 的 width/height:100% 与 object-fit:cover 全部丢失，
+ *    图片按**原始尺寸**渲染（实测 800×600 的图塞进 30×30 的框里），
+ *    父容器 overflow 又是 visible，于是整张图溢出来铺满屏幕 ——
+ *    用户看到的就是「头像/图标变成了全屏背景」。
+ *    （注意：那其实不是背景层，data-has-bg 始终是 null。）
+ *
+ * 这里的约束是硬性的：框架 overflow:hidden + 图片绝对定位填满 + object-fit:cover，
+ * 三重保证图片不可能溢出，也不可能被拉伸变形。
+ * ========================================================================== */
+
+/* 框架：确定尺寸 + 裁剪 + 定位上下文 */
+.brand-mark,
+.empty-art,
+.bubble-avatar {
+  position: relative;
+  overflow: hidden;
+}
+
+.fit-frame {
+  position: absolute;
+  inset: 0;
+  display: block;
+  overflow: hidden;
+}
+
+/* 默认模式：纯 CSS 填满框架，cover 居中裁切 —— 不拉伸、不溢出、随框架尺寸自适应 */
+.fit-img {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  /* 全局样式若给 img 设了 max-width，这里必须解除，否则 cover 会失效 */
+  max-width: none;
+  max-height: none;
+  user-select: none;
+  pointer-events: none;
+}
+
+/* 自定义裁剪模式：宽高由内联样式按 computeBackgroundLayout 给出（已保证等比），
+   所以这里必须让 object-fit 不要二次缩放 */
+.fit-img[data-custom='1'] {
+  object-fit: fill;
+}
+
+/* 圆形框架（头像）要把内层一起裁圆 */
+.bubble-avatar .fit-frame {
+  border-radius: inherit;
+}
+
+/* 空状态插图的默认图形（未替换时显示 Q 版吉祥物） */
+.empty-art > svg {
+  width: 70%;
+  height: 70%;
+}
+
+/* 关掉头像显示时彻底收起 */
+html[data-avatars='off'] .bubble-avatar {
+  display: none;
+}

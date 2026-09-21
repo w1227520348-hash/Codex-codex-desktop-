@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!--
+      img-src 需要放开 http/https：个性化设置允许粘贴远程图片 URL（含局域网图床）。
+      风险提示：加载远程图片会把你的 IP 与 Referer 暴露给该主机，因此渲染时统一带 no-referrer。
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https: http:; script-src 'self'"
+    />
+    <title>Codex 驾驶舱</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
